@@ -30,7 +30,7 @@
 | langchain-core | **1.3.x** | Базовые абстракции (messages, tools) |
 | asyncpg | 0.29.x | Async PostgreSQL драйвер |
 | python-jose | 3.3.x | JWT токены |
-| passlib | 1.7.x | Хэширование паролей |
+| bcrypt | 4.x / 5.x | Хэширование паролей (прямой вызов, без passlib) |
 | pandas | 2.2.x | Выполнение сгенерированных скриптов нормализации |
 
 ### Database
