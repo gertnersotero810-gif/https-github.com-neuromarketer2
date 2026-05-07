@@ -8,6 +8,25 @@
 
 ---
 
+## ТРЕКЕР ПРОГРЕССА
+
+| Задача | Название | Статус | Commit |
+|--------|----------|--------|--------|
+| 1.1 | Docker + Nginx + Health Check | ✅ | `4e5b57e` |
+| 1.2 | Alembic + Схема БД + Модели | ✅ | `91c9346` |
+| 1.3 | RLS + JWT + Auth endpoints | ✅ | `ad6f595` |
+| 1.4 | LLMProvider + UsageLog | ✅ | `0ec786e` |
+| 2.1 | CSV upload endpoint | ⬜ | — |
+| 2.2 | Schema mapping (LLM + AST) | ⬜ | — |
+| 2.3 | JSONB storage + Mat. View | ⬜ | — |
+| 3.1 | Detection Node (SQL) | ⬜ | — |
+| 3.2 | Verification Node + HITL | ⬜ | — |
+| 3.3 | Text-to-SQL (read-only) | ⬜ | — |
+| 4.1 | Dashboard API (widgetArray) | ⬜ | — |
+| 4.2 | React Dashboard (grid) | ⬜ | — |
+
+---
+
 ## ПРОТОКОЛ КОМАНДЫ (читать перед каждой задачей)
 
 ### Роли и правила переключения
@@ -500,6 +519,12 @@ git tag phase-3-complete
 
 ---
 
+### Задача 4.3: ExportService
+
+**Реализация:** Генерация .xlsx отчетов с формулами через openpyxl с помощью LLM. Нативная замена интеграции Google Sheets.
+
+---
+
 ### Чекпоинт Фазы 4 (MVP Complete)
 
 ```
@@ -512,26 +537,7 @@ git tag mvp-complete
 - `docker compose up` поднимает всё окружение с нуля за < 2 минуты
 - Демо-flow: регистрация → загрузка CSV → дашборд с виджетами → аномалия → HITL
 
----
 
-## Трекер прогресса
-
-| Задача | Статус | Ревьюер ✓ | Commit |
-|--------|--------|-----------|--------|
-| 1.1 Docker + структура | ⬜ | ⬜ | — |
-| 1.2 Alembic + модели | ⬜ | ⬜ | — |
-| 1.3 RLS + JWT | ⬜ | ⬜ | — |
-| 1.4 LLMProvider | ⬜ | ⬜ | — |
-| 2.1 CSV upload | ⬜ | ⬜ | — |
-| 2.2 Schema mapping | ⬜ | ⬜ | — |
-| 2.3 JSONB + MV | ⬜ | ⬜ | — |
-| 3.1 Detection Node | ⬜ | ⬜ | — |
-| 3.2 Verification + HITL | ⬜ | ⬜ | — |
-| 3.3 Text-to-SQL | ⬜ | ⬜ | — |
-| 4.1 Dashboard API | ⬜ | ⬜ | — |
-| 4.2 React Dashboard | ⬜ | ⬜ | — |
-
----
 
 ## ФАЗА 5: Монетизация (после MVP, вне текущего плана)
 

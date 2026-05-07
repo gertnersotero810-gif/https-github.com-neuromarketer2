@@ -30,7 +30,7 @@
 | langchain-core | **1.3.x** | Базовые абстракции (messages, tools) |
 | asyncpg | 0.29.x | Async PostgreSQL драйвер |
 | python-jose | 3.3.x | JWT токены |
-| bcrypt | 4.x / 5.x | Хэширование паролей (прямой вызов, без passlib) |
+| bcrypt | 4.x | Хэширование паролей (прямой, без passlib) |
 | pandas | 2.2.x | Выполнение сгенерированных скриптов нормализации |
 
 ### Database
@@ -714,6 +714,34 @@ ENVIRONMENT=development
 
 ---
 
+## 12. ТРЕКЕР ПРОГРЕССА
+
+> Обновляется Ревьюером после каждой задачи. Commit-хэш берётся из `git log --oneline`.
+
+| Задача | Название | Статус | Ревьюер ✓ | Commit |
+|--------|----------|--------|-----------|--------|
+| 1.1 | Docker + Nginx + Health Check | ✅ | ✅ | `4e5b57e` |
+| 1.2 | Alembic + Схема БД + Модели | ✅ | ✅ | `91c9346` |
+| 1.3 | RLS + JWT + Auth endpoints | ✅ | ✅ | `ad6f595` |
+| 1.4 | LLMProvider + UsageLog | ✅ | ✅ | `0ec786e` |
+| 2.1 | CSV upload endpoint | ⬜ | ⬜ | — |
+| 2.2 | Schema mapping (LLM + AST) | ⬜ | ⬜ | — |
+| 2.3 | JSONB storage + Mat. View | ⬜ | ⬜ | — |
+| 3.1 | Detection Node (SQL) | ⬜ | ⬜ | — |
+| 3.2 | Verification Node + HITL | ⬜ | ⬜ | — |
+| 3.3 | Text-to-SQL (read-only) | ⬜ | ⬜ | — |
+| 4.1 | Dashboard API (widgetArray) | ⬜ | ⬜ | — |
+| 4.2 | React Dashboard (grid) | ⬜ | ⬜ | — |
+
+**Правило обновления (ОБЯЗАТЕЛЬНО для Ревьюера):**
+После каждой задачи Ревьюер обязан:
+1. Изменить ⬜ → ✅ в колонке "Статус"
+2. Изменить ⬜ → ✅ в колонке "Ревьюер ✓"
+3. Вставить хэш коммита (7 символов) из `git log --oneline -1`
+4. Показать grep-подтверждение (см. правило верификации выше)
+
+---
+
 ## 11. KNOWN RISKS (Pre-Flight Check — 07.05.2026)
 
 | Риск | Вероятность | Митигация | Затронутые задачи |
@@ -726,3 +754,4 @@ ENVIRONMENT=development
 | **asyncpg 0.29.x + SQLAlchemy 2.0**: known conflicts отсутствуют, но необходим `expire_on_commit=False` в `async_sessionmaker` иначе lazy-loading падает после commit. | Низкая | Добавить `expire_on_commit=False` в `async_sessionmaker` при настройке в `config.py`. | 1.1, 1.2 |
 | **REFRESH MATERIALIZED VIEW CONCURRENTLY** без UNIQUE-индекса выбрасывает ошибку `cannot refresh concurrently`. | Средняя | UNIQUE-индекс `idx_metrics_daily_mv_pk` создаётся в миграции 003 ДО первого REFRESH. Тест явно проверяет порядок. | 2.3 |
 | **Масштабируемость REFRESH MV при 50+ тенантах.** REFRESH CONCURRENTLY создаёт очередь — все тенанты ждут единого job-а. | Средняя | MVP: часовой APScheduler job достаточен. Пост-MVP: партиционирование `raw_metrics` по `tenant_id` + per-tenant refresh расписание. | 2.3, Фаза 5 |
+
