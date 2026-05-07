@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     FIRST_SUPERUSER: str = "admin@neuromarketer.io"
     FIRST_SUPERUSER_PASSWORD: str = "changeme"
     ENVIRONMENT: str = "development"
+    API_V1_STR: str = "/api/v1"
 
     class Config:
         env_file = ".env"
