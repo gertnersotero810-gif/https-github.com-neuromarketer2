@@ -42,6 +42,28 @@ async def register(
     db.add(user_obj)
     await db.commit()
     await db.refresh(user_obj)
+    
+    # Create default tenant and membership
+    from app.models.tenant import Tenant
+    from app.models.membership import UserTenantMembership
+    import uuid
+    
+    tenant_obj = Tenant(
+        name=f"{user_obj.full_name}'s Workspace",
+        slug=f"workspace-{uuid.uuid4().hex[:8]}"
+    )
+    db.add(tenant_obj)
+    await db.commit()
+    await db.refresh(tenant_obj)
+    
+    membership_obj = UserTenantMembership(
+        user_id=user_obj.id,
+        tenant_id=tenant_obj.id,
+        role="owner"
+    )
+    db.add(membership_obj)
+    await db.commit()
+    
     return user_obj
 
 @router.post("/login", response_model=Token)
@@ -59,13 +81,21 @@ async def login_access_token(
     elif not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     
+    # Get user's default tenant
+    from app.models.membership import UserTenantMembership
+    membership_result = await db.execute(
+        select(UserTenantMembership).where(UserTenantMembership.user_id == user.id)
+    )
+    membership = membership_result.scalars().first()
+    tenant_id = membership.tenant_id if membership else None
+    
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     return {
         "access_token": security.create_access_token(
-            user.id, expires_delta=access_token_expires
+            user.id, tenant_id=tenant_id, expires_delta=access_token_expires
         ),
-        "refresh_token": security.create_refresh_token(user.id),
+        "refresh_token": security.create_refresh_token(user.id, tenant_id=tenant_id),
         "token_type": "bearer",
     }
 
@@ -88,6 +118,7 @@ async def refresh_token(
                 detail="Invalid token type",
             )
         user_id = payload.get("sub")
+        tenant_id = payload.get("tenant_id")
         if user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -108,9 +139,9 @@ async def refresh_token(
     
     return {
         "access_token": security.create_access_token(
-            user.id, expires_delta=access_token_expires
+            user.id, tenant_id=tenant_id, expires_delta=access_token_expires
         ),
-        "refresh_token": security.create_refresh_token(user.id),
+        "refresh_token": security.create_refresh_token(user.id, tenant_id=tenant_id),
         "token_type": "bearer",
     }
 

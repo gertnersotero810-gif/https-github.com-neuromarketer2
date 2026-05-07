@@ -45,6 +45,7 @@ async def get_db(
         )
 
     async with AsyncSessionLocal() as session:
+        session.info["tenant_id"] = tenant_uuid
         # Set tenant context for RLS
         await session.execute(
             text("SELECT set_config('app.current_tenant_id', :tid, true)"),
