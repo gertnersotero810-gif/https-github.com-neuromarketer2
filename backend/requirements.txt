@@ -8,8 +8,8 @@ pydantic-settings==2.5.2
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 httpx==0.27.2
-langgraph==1.1.0
-langchain-core==1.3.0
+langgraph
+langchain-core
 pandas==2.2.3
 
 # Dev / test

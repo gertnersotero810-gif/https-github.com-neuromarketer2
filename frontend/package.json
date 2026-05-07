@@ -1,0 +1,8 @@
+{
+  "name": "frontend-stub",
+  "version": "1.0.0",
+  "description": "Dummy frontend for Docker build",
+  "scripts": {
+    "build": "mkdir -p dist && echo '<h1>Neuromarketer MVP Frontend</h1>' > dist/index.html"
+  }
+}
