@@ -242,3 +242,169 @@ async def test_csv_upload_rls_denied():
         )
         # Should be 404 (or 403, but 404 is safer to prevent enumeration)
         assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_upsert_raw_metrics():
+    # 1. Create tenant, project
+    TestingSessionLocal = get_testing_session()
+    async with TestingSessionLocal() as session:
+        # Generate random IDs to avoid conflicts
+        tenant_id = uuid.uuid4()
+        project_id = uuid.uuid4()
+        
+        # Insert tenant
+        await session.execute(
+            text("INSERT INTO tenants (id, name, slug) VALUES (:id, :name, :slug)"),
+            {"id": tenant_id, "name": "Upsert Tenant", "slug": f"upsert-tenant-{uuid.uuid4().hex[:6]}"}
+        )
+        # Insert project
+        await session.execute(
+            text("INSERT INTO projects (id, tenant_id, name) VALUES (:id, :tid, :name)"),
+            {"id": project_id, "tid": tenant_id, "name": "Upsert Project"}
+        )
+        await session.commit()
+        
+    # We will use pandas DataFrame as input to save_normalized_batch
+    import pandas as pd
+    from app.services.import_service import save_normalized_batch
+    
+    # 3 rows of data
+    df1 = pd.DataFrame([
+        {"campaign_id": "camp_001", "date": "2024-01-01", "impressions": 1000, "clicks": 50, "spend": 10.0, "conversions": 5},
+        {"campaign_id": "camp_002", "date": "2024-01-01", "impressions": 2000, "clicks": 100, "spend": 20.0, "conversions": 10},
+        {"campaign_id": "camp_003", "date": "2024-01-01", "impressions": 3000, "clicks": 150, "spend": 30.0, "conversions": 15},
+    ])
+    
+    # Run the upsert the first time
+    async with TestingSessionLocal() as session:
+        # Set tenant RLS
+        await session.execute(
+            text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+            {"tid": str(tenant_id)}
+        )
+        count1 = await save_normalized_batch(df1, project_id, tenant_id, session)
+        await session.commit()
+        
+    assert count1 == 3
+    
+    # Check that they exist
+    async with TestingSessionLocal() as session:
+        await session.execute(
+            text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+            {"tid": str(tenant_id)}
+        )
+        res = await session.execute(text("SELECT count(*) FROM raw_metrics WHERE tenant_id = :tid"), {"tid": tenant_id})
+        assert res.scalar() == 3
+        
+    # Same 3 rows but with updated values (double impressions, clicks, etc.)
+    df2 = pd.DataFrame([
+        {"campaign_id": "camp_001", "date": "2024-01-01", "impressions": 1500, "clicks": 75, "spend": 15.0, "conversions": 7},
+        {"campaign_id": "camp_002", "date": "2024-01-01", "impressions": 2500, "clicks": 125, "spend": 25.0, "conversions": 12},
+        {"campaign_id": "camp_003", "date": "2024-01-01", "impressions": 3500, "clicks": 175, "spend": 35.0, "conversions": 17},
+    ])
+    
+    async with TestingSessionLocal() as session:
+        await session.execute(
+            text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+            {"tid": str(tenant_id)}
+        )
+        count2 = await save_normalized_batch(df2, project_id, tenant_id, session)
+        await session.commit()
+        
+    assert count2 == 3
+    
+    # Check that we still have 3 rows and values are updated
+    async with TestingSessionLocal() as session:
+        await session.execute(
+            text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+            {"tid": str(tenant_id)}
+        )
+        res = await session.execute(text("SELECT count(*) FROM raw_metrics WHERE tenant_id = :tid"), {"tid": tenant_id})
+        assert res.scalar() == 3
+        
+        res_rows = await session.execute(
+            text("SELECT normalized FROM raw_metrics WHERE tenant_id = :tid ORDER BY (normalized->>'campaign_id')"),
+            {"tid": tenant_id}
+        )
+        rows = [r[0] for r in res_rows.all()]
+        assert rows[0]["impressions"] == 1500
+        assert rows[1]["impressions"] == 2500
+        assert rows[2]["impressions"] == 3500
+
+
+@pytest.mark.asyncio
+async def test_gin_index_performance():
+    import time
+    TestingSessionLocal = get_testing_session()
+    
+    # Create tenant, project
+    tenant_id = uuid.uuid4()
+    project_id = uuid.uuid4()
+    async with TestingSessionLocal() as session:
+        await session.execute(
+            text("INSERT INTO tenants (id, name, slug) VALUES (:id, :name, :slug)"),
+            {"id": tenant_id, "name": "Perf Tenant", "slug": f"perf-tenant-{uuid.uuid4().hex[:6]}"}
+        )
+        await session.execute(
+            text("INSERT INTO projects (id, tenant_id, name) VALUES (:id, :tid, :name)"),
+            {"id": project_id, "tid": tenant_id, "name": "Perf Project"}
+        )
+        await session.commit()
+
+    # Create 10,000 metrics
+    import pandas as pd
+    from app.services.import_service import save_normalized_batch
+    from app.services.mv_refresh_service import refresh_metrics_mv
+    
+    rows = []
+    for i in range(10000):
+        rows.append({
+            "campaign_id": f"camp_{i % 100:03d}",
+            "date": f"2024-01-{(i // 100) % 28 + 1:02d}",
+            "impressions": 1000 + i,
+            "clicks": 50 + (i % 10),
+            "spend": 10.0 + (i * 0.1),
+            "conversions": 5 + (i % 5)
+        })
+    df = pd.DataFrame(rows)
+    
+    # Insert in batch
+    async with TestingSessionLocal() as session:
+        await session.execute(
+            text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+            {"tid": str(tenant_id)}
+        )
+        await save_normalized_batch(df, project_id, tenant_id, session)
+        await session.commit()
+        
+    # Refresh materialized view concurrently
+    async with TestingSessionLocal() as session:
+        await refresh_metrics_mv(session)
+        await session.commit()
+        
+    # Execute query and measure performance
+    query_str = "SELECT * FROM metrics_daily_mv WHERE tenant_id = :tid AND campaign_id = 'camp_001'"
+    
+    async with TestingSessionLocal() as session:
+        await session.execute(
+            text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+            {"tid": str(tenant_id)}
+        )
+        start_time = time.monotonic()
+        res = await session.execute(text(query_str), {"tid": tenant_id})
+        res.all()
+        elapsed_ms = (time.monotonic() - start_time) * 1000
+        
+    assert elapsed_ms < 100.0, f"Query took too long: {elapsed_ms:.2f}ms"
+    
+    # EXPLAIN
+    async with TestingSessionLocal() as session:
+        explain_res = await session.execute(text(f"EXPLAIN {query_str}"), {"tid": tenant_id})
+        explain_lines = [r[0] for r in explain_res.all()]
+        explain_text = "\n".join(explain_lines)
+        
+    print(f"Explain plan:\n{explain_text}")
+    assert "Index Scan" in explain_text or "Bitmap Index Scan" in explain_text
+    assert "Seq Scan" not in explain_text
+

@@ -87,12 +87,13 @@ async def analyze_csv(
     # 7. Generate file hash
     file_hash = hashlib.sha256(content).hexdigest()
 
-    # 8. Save session in-memory
+    # 8. Save session in-memory, including the parsed dataframe for committing
     import_sessions[file_hash] = {
         "columns": [str(c) for c in df.columns],
         "samples": samples,
         "project_id": str(project_id),
-        "row_count": row_count
+        "row_count": row_count,
+        "df": df
     }
 
     return {
@@ -101,3 +102,108 @@ async def analyze_csv(
         "file_hash": file_hash,
         "row_count": row_count
     }
+
+
+from pydantic import BaseModel
+
+class CommitRequest(BaseModel):
+    file_hash: str
+
+
+@router.post("/projects/{project_id}/import/commit")
+async def commit_csv(
+    project_id: str,
+    request: CommitRequest,
+    current_user: User = Depends(deps.get_current_user),
+    db: AsyncSession = Depends(deps.get_db)
+) -> Dict[str, Any]:
+    # 1. RLS & project check
+    try:
+        project_uuid = uuid.UUID(project_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid project ID format. Must be a valid UUID."
+        )
+
+    project_result = await db.execute(select(Project).where(Project.id == project_uuid))
+    project = project_result.scalars().first()
+    current_tenant_id = db.info.get("tenant_id")
+    if not project or (current_tenant_id and project.tenant_id != current_tenant_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found or access denied."
+        )
+
+    # 2. Get import session
+    session_data = import_sessions.get(request.file_hash)
+    if not session_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Import session not found or expired."
+        )
+
+    df = session_data.get("df")
+    if df is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dataframe content not found in session."
+        )
+
+    # 3. Import services
+    from app.services.import_service import save_normalized_batch
+    from app.services.mv_refresh_service import refresh_metrics_mv
+
+    # 4. Perform field normalization
+    df_normalized = df.copy()
+    rename_map = {}
+    for col in df_normalized.columns:
+        col_lower = str(col).lower()
+        if "date" in col_lower:
+            rename_map[col] = "date"
+        elif "campaign" in col_lower or "camp" in col_lower:
+            rename_map[col] = "campaign_id"
+        elif "impression" in col_lower or "views" in col_lower:
+            rename_map[col] = "impressions"
+        elif "click" in col_lower:
+            rename_map[col] = "clicks"
+        elif "spend" in col_lower or "cost" in col_lower:
+            rename_map[col] = "spend"
+        elif "conversion" in col_lower or "leads" in col_lower:
+            rename_map[col] = "conversions"
+            
+    df_normalized = df_normalized.rename(columns=rename_map)
+    
+    # Pre-populate required columns if missing
+    required_cols = {
+        "date": "2024-01-01",
+        "campaign_id": "unknown_campaign",
+        "impressions": 0,
+        "clicks": 0,
+        "spend": 0.0,
+        "conversions": 0
+    }
+    for col, default_val in required_cols.items():
+        if col not in df_normalized.columns:
+            df_normalized[col] = default_val
+
+    # 5. Save and refresh inside a transaction block
+    try:
+        total_saved = await save_normalized_batch(df_normalized, project_uuid, project.tenant_id, db)
+        await db.commit()
+        
+        # Refresh MV after commit
+        await refresh_metrics_mv(db)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to commit normalized metrics: {str(e)}"
+        )
+
+    return {
+        "status": "success",
+        "rows_committed": total_saved
+    }
+
