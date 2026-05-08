@@ -63,3 +63,49 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+---
+
+## НейроМаркетолог: Проектный чеклист Ревьюера
+
+Этот чеклист выполняется ПОСЛЕ GREEN фазы (все тесты зелёные),
+ДО `git commit` с кодом. Запусти каждую команду, покажи вывод дословно.
+
+### Блок 1: Запрещённые импорты
+```bash
+grep -rn "import openai\|from openai\|langchain_community\|langchain_openai" backend/
+```
+**Ожидание:** пустой вывод. Любое совпадение = ❌ блок коммита.
+
+### Блок 2: RLS активен
+```bash
+grep -n "SET LOCAL\|set_config" backend/app/api/v1/deps.py
+```
+**Ожидание:** найдена строка с `SET LOCAL`. Пустой вывод = ❌.
+
+### Блок 3: Агенты не пишут в БД
+```bash
+grep -rn "INSERT\|UPDATE\|DELETE" backend/app/agents/
+```
+**Ожидание:** пустой вывод. Любое совпадение = ❌.
+
+### Блок 4: LLMResponse используется через .content
+```bash
+grep -rn "\.complete(" backend/app/ | grep -v "response\.content\|\.content"
+```
+**Ожидание:** пустой вывод. Совпадение = место где результат `.complete()`
+используется напрямую как строка (TypeError в runtime).
+
+### Блок 5: Нет синхронных session.execute
+```bash
+grep -rn "session\.execute(" backend/app/ | grep -v "await"
+```
+**Ожидание:** пустой вывод. Совпадение = блокировка Event Loop.
+
+### Правило обновления трекера (выполняется ПОСЛЕ чеклиста):
+```bash
+# Замени ⬜ → ✅ в ARCHITECTURE.md и IMPLEMENTATION_PLAN.md
+git add ARCHITECTURE.md IMPLEMENTATION_PLAN.md
+git commit -m "docs: update tracker for task X.X"
+git log --oneline -1
+```
