@@ -17,8 +17,8 @@
 | 1.3 | RLS + JWT + Auth endpoints | ✅ | `ad6f595` |
 | 1.4 | LLMProvider + UsageLog | ✅ | `0ec786e` |
 | 2.1 | CSV upload endpoint | ✅ | `a9b6c1b` |
-| 2.2 | Schema mapping (LLM + AST) | ⬜ | — |
-| 2.3 | JSONB storage + Mat. View | ⬜ | — |
+| 2.2 | Schema mapping (LLM + AST) | ✅ | `30c77b7` |
+| 2.3 | JSONB storage + Mat. View | ✅ | `30c77b7` |
 | 3.1 | Detection Node (SQL) | ⬜ | — |
 | 3.2 | Verification Node + HITL | ⬜ | — |
 | 3.3 | Text-to-SQL (read-only) | ⬜ | — |
