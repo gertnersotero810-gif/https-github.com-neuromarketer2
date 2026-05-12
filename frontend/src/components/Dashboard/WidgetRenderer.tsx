@@ -26,16 +26,8 @@ const COLORS = ['#6366f1', '#8b5cf6', '#10b981', '#ec4899', '#f59e0b'];
 export const WidgetRenderer: React.FC<WidgetRendererProps> = ({ widget }) => {
   const { chart, dataKey, title } = widget;
 
-  // Use database metrics if populated by the backend; fallback to mock data if empty
-  const data = widget.data && widget.data.length > 0 ? widget.data : [
-    { name: 'Пн', [dataKey]: 12 },
-    { name: 'Вт', [dataKey]: 19 },
-    { name: 'Ср', [dataKey]: 3 },
-    { name: 'Чт', [dataKey]: 5 },
-    { name: 'Пт', [dataKey]: 2 },
-    { name: 'Сб', [dataKey]: 14 },
-    { name: 'Вс', [dataKey]: 8 },
-  ];
+  const data = widget.data || [];
+  const hasData = data.length > 0;
 
   // Common Tooltip component props for dark theme
   const customTooltipProps = {
@@ -50,6 +42,30 @@ export const WidgetRenderer: React.FC<WidgetRendererProps> = ({ widget }) => {
     itemStyle: { color: '#ffffff', fontSize: '12px' },
     labelStyle: { color: '#94a3b8', fontSize: '11px', fontWeight: 600 },
   };
+
+  const renderEmptyState = () => (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        width: '100%',
+        padding: '1rem',
+        textAlign: 'center',
+        boxSizing: 'border-box',
+      }}
+    >
+      <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📉</div>
+      <div style={{ fontSize: '0.8125rem', color: '#94a3b8', fontWeight: 500 }}>
+        Нет данных для отображения
+      </div>
+      <p style={{ fontSize: '0.6875rem', color: '#64748b', marginTop: '0.25rem', maxWidth: '180px', lineHeight: 1.4 }}>
+        Импортируйте CSV-отчеты кампаний, чтобы наполнить аналитику
+      </p>
+    </div>
+  );
 
   const renderChart = () => {
     switch (chart) {
@@ -93,7 +109,7 @@ export const WidgetRenderer: React.FC<WidgetRendererProps> = ({ widget }) => {
               <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
               <YAxis stroke="#64748b" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
               <Tooltip {...customTooltipProps} />
-              <Area type="monotone" dataKey={dataKey} stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url(#colorAreaGrad)" />
+              <Area type="monotone" dataKey={dataKey} stroke="#6366f1" strokeWidth={2} fillOpacity={1} fill="url('#colorAreaGrad')" />
             </AreaChart>
           </ResponsiveContainer>
         );
@@ -125,7 +141,7 @@ export const WidgetRenderer: React.FC<WidgetRendererProps> = ({ widget }) => {
         );
 
       case 'number':
-        const lastValue = data[data.length - 1][dataKey];
+        const lastValue = data[data.length - 1]?.[dataKey];
         return (
           <div
             style={{
@@ -137,7 +153,7 @@ export const WidgetRenderer: React.FC<WidgetRendererProps> = ({ widget }) => {
             }}
           >
             <div style={{ fontSize: '2.75rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.03em', lineHeight: 1 }}>
-              {typeof lastValue === 'number' ? lastValue.toLocaleString() : lastValue}
+              {typeof lastValue === 'number' ? lastValue.toLocaleString() : lastValue ?? '0'}
             </div>
             <div style={{ fontSize: '0.8125rem', color: '#64748b', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
               <span style={{ color: '#10b981', fontWeight: 600 }}>↑ 14.2%</span> с начала недели
@@ -180,7 +196,7 @@ export const WidgetRenderer: React.FC<WidgetRendererProps> = ({ widget }) => {
         {title}
       </div>
       <div style={{ flex: 1, minHeight: 0, width: '100%' }}>
-        {renderChart()}
+        {hasData ? renderChart() : renderEmptyState()}
       </div>
     </div>
   );

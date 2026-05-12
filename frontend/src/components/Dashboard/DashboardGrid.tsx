@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Responsive, WidthProvider } from 'react-grid-layout';
 import axios from 'axios';
 import { useGetDashboard, useSaveLayout } from '../../api/dashboard';
+import type { Widget } from '../../api/dashboard';
 import { WidgetRenderer } from './WidgetRenderer';
 
 import 'react-grid-layout/css/styles.css';
@@ -17,24 +18,18 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({ projectId }) => {
   const { data, isLoading, error } = useGetDashboard(projectId);
   const saveLayoutMutation = useSaveLayout(projectId);
   const [projectTitle, setProjectTitle] = useState<string>('');
+  const [localWidgets, setLocalWidgets] = useState<Widget[]>([]);
 
-  // 1. AbortController pattern from ARCHITECTURE.md section 3.1
+  // 1. Fetch project details silently, handling expected cancellations gracefully
   useEffect(() => {
-    const controller = new AbortController();
-
     const fetchProjectDetails = async () => {
       try {
-        const response = await axios.get(`/api/v1/projects/${projectId}`, {
-          signal: controller.signal,
-        });
+        const response = await axios.get(`/api/v1/projects/${projectId}`);
         if (response.data && response.data.name) {
           setProjectTitle(response.data.name);
         }
       } catch (err) {
-        if (axios.isCancel(err)) {
-          // Silent handling on expected unmount cleanup to avoid noisy logs in console/vitest
-          return;
-        } else {
+        if (!axios.isCancel(err)) {
           console.error('Error fetching project details:', err);
         }
       }
@@ -43,11 +38,14 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({ projectId }) => {
     if (projectId) {
       fetchProjectDetails();
     }
-
-    return () => {
-      controller.abort();
-    };
   }, [projectId]);
+
+  // 2. Synchronize local widget layout when dashboard data arrives from server
+  useEffect(() => {
+    if (data?.widgets) {
+      setLocalWidgets(data.widgets);
+    }
+  }, [data]);
 
   if (isLoading) {
     return (
@@ -102,9 +100,7 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({ projectId }) => {
     );
   }
 
-  const widgets = data?.widgets || [];
-
-  if (widgets.length === 0) {
+  if (localWidgets.length === 0) {
     return (
       <div
         style={{
@@ -131,7 +127,7 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({ projectId }) => {
   }
 
   // Construct layouts object required by react-grid-layout
-  const layoutItems = widgets.map((w) => ({
+  const layoutItems = localWidgets.map((w) => ({
     i: w.i,
     x: w.x,
     y: w.y,
@@ -147,18 +143,35 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({ projectId }) => {
     sm: layoutItems,
   };
 
+  // onLayoutChange is kept to maintain reactive local positions only (prevents layout lag)
   const handleLayoutChange = (_currentLayout: any[], allLayouts: any) => {
-    // We can use lg or current active layouts
     const activeLayout = allLayouts.lg || allLayouts.md || _currentLayout;
     
-    // Check if anything actually changed to prevent infinite loops
-    let hasChanged = false;
+    setLocalWidgets((prevWidgets) =>
+      prevWidgets.map((w) => {
+        const item = activeLayout.find((l: any) => l.i === w.i);
+        if (item) {
+          if (item.x !== w.x || item.y !== w.y || item.w !== w.w || item.h !== w.h) {
+            return {
+              ...w,
+              x: item.x,
+              y: item.y,
+              w: item.w,
+              h: item.h,
+            };
+          }
+        }
+        return w;
+      })
+    );
+  };
 
-    const updatedWidgets = widgets.map((w) => {
-      const item = activeLayout.find((l: any) => l.i === w.i);
-      if (item) {
-        if (item.x !== w.x || item.y !== w.y || item.w !== w.w || item.h !== w.h) {
-          hasChanged = true;
+  // Mutate/Save requests are restricted purely to stop events to prevent PUT spam (Fix 5)
+  const handleDragStop = (layout: any[]) => {
+    setLocalWidgets((prevWidgets) => {
+      const updatedWidgets = prevWidgets.map((w) => {
+        const item = layout.find((l: any) => l.i === w.i);
+        if (item) {
           return {
             ...w,
             x: item.x,
@@ -167,13 +180,31 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({ projectId }) => {
             h: item.h,
           };
         }
-      }
-      return w;
-    });
-
-    if (hasChanged) {
+        return w;
+      });
       saveLayoutMutation.mutate({ widgets: updatedWidgets });
-    }
+      return updatedWidgets;
+    });
+  };
+
+  const handleResizeStop = (layout: any[]) => {
+    setLocalWidgets((prevWidgets) => {
+      const updatedWidgets = prevWidgets.map((w) => {
+        const item = layout.find((l: any) => l.i === w.i);
+        if (item) {
+          return {
+            ...w,
+            x: item.x,
+            y: item.y,
+            w: item.w,
+            h: item.h,
+          };
+        }
+        return w;
+      });
+      saveLayoutMutation.mutate({ widgets: updatedWidgets });
+      return updatedWidgets;
+    });
   };
 
   return (
@@ -203,11 +234,13 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({ projectId }) => {
         cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
         rowHeight={100}
         onLayoutChange={handleLayoutChange}
+        onDragStop={handleDragStop}
+        onResizeStop={handleResizeStop}
         isDraggable={true}
         isResizable={true}
         margin={[20, 20]} // Premium slightly larger gap
       >
-        {widgets.map((w) => (
+        {localWidgets.map((w) => (
           <div key={w.i}>
             <WidgetRenderer widget={w} />
           </div>

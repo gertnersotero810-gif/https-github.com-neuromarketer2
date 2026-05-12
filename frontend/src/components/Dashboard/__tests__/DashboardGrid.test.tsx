@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { DashboardGrid } from '../DashboardGrid';
+import axios from 'axios';
 import * as dashboardApi from '../../../api/dashboard';
 
 // Mock the API hooks
@@ -32,9 +33,10 @@ vi.mock('recharts', async () => {
 describe('DashboardGrid Component Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(axios, 'get').mockResolvedValue({ data: { name: 'Тестовый Проект' } });
   });
 
-  it('widget with chart:"line" renders widget-line', () => {
+  it('widget with chart:"line" renders widget-line', async () => {
     vi.mocked(dashboardApi.useGetDashboard).mockReturnValue({
       data: {
         widgets: [
@@ -60,11 +62,12 @@ describe('DashboardGrid Component Tests', () => {
 
     render(<DashboardGrid projectId="test-uuid" />);
 
+    expect(await screen.findByText('Проект: Тестовый Проект')).toBeInTheDocument();
     expect(screen.getByTestId('widget-line')).toBeInTheDocument();
     expect(screen.getByText('Line Chart KPI')).toBeInTheDocument();
   });
 
-  it('widget with chart:"bar" renders widget-bar', () => {
+  it('widget with chart:"bar" renders widget-bar', async () => {
     vi.mocked(dashboardApi.useGetDashboard).mockReturnValue({
       data: {
         widgets: [
@@ -90,7 +93,40 @@ describe('DashboardGrid Component Tests', () => {
 
     render(<DashboardGrid projectId="test-uuid" />);
 
+    expect(await screen.findByText('Проект: Тестовый Проект')).toBeInTheDocument();
     expect(screen.getByTestId('widget-bar')).toBeInTheDocument();
     expect(screen.getByText('Spend Bar Chart')).toBeInTheDocument();
   });
+
+  it('renders "Нет данных" empty state when widget has empty or missing data', async () => {
+    vi.mocked(dashboardApi.useGetDashboard).mockReturnValue({
+      data: {
+        widgets: [
+          {
+            i: 'line-widget',
+            x: 0,
+            y: 0,
+            w: 6,
+            h: 4,
+            chart: 'line',
+            dataKey: 'ctr',
+            title: 'Empty Line Chart',
+            data: [], // empty data array
+          },
+        ],
+      },
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.mocked(dashboardApi.useSaveLayout).mockReturnValue({
+      mutate: vi.fn(),
+    } as any);
+
+    render(<DashboardGrid projectId="test-uuid" />);
+
+    expect(await screen.findByText('Проект: Тестовый Проект')).toBeInTheDocument();
+    expect(screen.getByText('Нет данных для отображения')).toBeInTheDocument();
+  });
 });
+

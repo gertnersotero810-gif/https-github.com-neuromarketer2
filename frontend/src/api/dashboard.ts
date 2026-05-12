@@ -30,8 +30,8 @@ const apiClient = axios.create({
 export const useGetDashboard = (projectId: string) => {
   return useQuery<DashboardResponse>({
     queryKey: ['dashboard', projectId],
-    queryFn: async () => {
-      const { data } = await apiClient.get(`/api/v1/projects/${projectId}/dashboard`);
+    queryFn: async ({ signal }) => {
+      const { data } = await apiClient.get(`/api/v1/projects/${projectId}/dashboard`, { signal });
       return data;
     },
     enabled: !!projectId,

@@ -1,4 +1,5 @@
 import uuid
+import logging
 from typing import List, Dict, Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +7,8 @@ from sqlalchemy.future import select
 from app.models.dashboard_layout import DashboardLayout
 from app.models.project import Project
 from app.schemas.dashboard import Widget
+
+logger = logging.getLogger(__name__)
 
 async def get_widget_array(
     project_id: uuid.UUID,
@@ -94,8 +97,8 @@ async def get_widget_array(
                 "ctr": ctr,
                 "cpc": cpc
             })
-    except Exception:
-        # Fallback to empty list if view is empty or does not exist
+    except Exception as e:
+        logger.exception("Failed to fetch metrics_daily_mv for project %s: %s", project_id, e)
         mv_data = []
 
     # 3. Inject the server-driven database metrics into the widgets
@@ -137,7 +140,9 @@ async def save_layout(
         # Retrieve project tenant_id from database
         project_result = await db.execute(select(Project).where(Project.id == project_id))
         project = project_result.scalars().first()
-        tenant_id = project.tenant_id if project else None
+        if not project:
+            raise ValueError(f"Project {project_id} not found — cannot save layout")
+        tenant_id = project.tenant_id
         
         layout = DashboardLayout(
             tenant_id=tenant_id,

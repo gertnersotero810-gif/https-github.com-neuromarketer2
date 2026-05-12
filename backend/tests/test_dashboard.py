@@ -133,3 +133,56 @@ async def test_layout_persistence(auth_client):
     
     widget = widgets[0]
     assert widget["i"] == "revenue"
+
+
+@pytest.mark.asyncio
+async def test_get_widget_array_logs_exception_on_failure(caplog):
+    import logging
+    from app.services import dashboard_service
+    from unittest.mock import AsyncMock
+    
+    # We pass a mock AsyncSession that raises an error on select
+    db_mock = AsyncMock()
+    # First execute (layout fetch) returns an empty result
+    db_mock.execute.side_effect = [
+        AsyncMock(scalars=lambda: AsyncMock(first=lambda: None)),
+        Exception("Materialized view is locked or uninitialized")
+    ]
+    
+    # Run service method
+    widgets = await dashboard_service.get_widget_array(
+        project_id=uuid.uuid4(),
+        user_id=uuid.uuid4(),
+        db=db_mock
+    )
+    
+    # Assert it fell back gracefully
+    assert len(widgets) > 0
+    # Assert exception was logged
+    assert any("Failed to fetch metrics_daily_mv" in record.message for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_save_layout_raises_value_error_if_project_missing():
+    from app.services import dashboard_service
+    from app.schemas.dashboard import Widget
+    from unittest.mock import AsyncMock
+    
+    db_mock = AsyncMock()
+    # First execute (layout fetch) returns None
+    # Second execute (project fetch) returns None to simulate missing project
+    db_mock.execute.side_effect = [
+        AsyncMock(scalars=lambda: AsyncMock(first=lambda: None)),
+        AsyncMock(scalars=lambda: AsyncMock(first=lambda: None))
+    ]
+    
+    with pytest.raises(ValueError, match="not found — cannot save layout"):
+        await dashboard_service.save_layout(
+            project_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            widgets=[
+                Widget(i="w1", x=0, y=0, w=2, h=2, chart="line", dataKey="val", title="T1")
+            ],
+            db=db_mock
+        )
+
