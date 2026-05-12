@@ -15,6 +15,7 @@ export interface Widget {
     date_from?: string;
     date_to?: string;
   };
+  data?: Record<string, any>[];
 }
 
 export interface DashboardResponse {

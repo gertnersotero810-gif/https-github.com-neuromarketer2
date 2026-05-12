@@ -11,6 +11,7 @@ class Widget(BaseModel):
     dataKey: str
     title: str
     filters: Optional[dict] = None
+    data: Optional[List[dict]] = None
 
 class DashboardResponse(BaseModel):
     widgets: List[Widget]

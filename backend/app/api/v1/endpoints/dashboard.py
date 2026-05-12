@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,8 +81,10 @@ async def update_dashboard_layout(
         project_id=project_uuid,
         user_id=current_user.id,
         widgets=layout_update.widgets,
-        tenant_id=project.tenant_id,
         db=db
     )
 
-    return {"status": "saved"}
+    return {
+        "status": "saved",
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }

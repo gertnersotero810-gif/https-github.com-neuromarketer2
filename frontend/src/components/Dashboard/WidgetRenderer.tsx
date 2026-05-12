@@ -26,8 +26,8 @@ const COLORS = ['#6366f1', '#8b5cf6', '#10b981', '#ec4899', '#f59e0b'];
 export const WidgetRenderer: React.FC<WidgetRendererProps> = ({ widget }) => {
   const { chart, dataKey, title } = widget;
 
-  // Generate clean mock data driven by the dataKey
-  const data = [
+  // Use database metrics if populated by the backend; fallback to mock data if empty
+  const data = widget.data && widget.data.length > 0 ? widget.data : [
     { name: 'Пн', [dataKey]: 12 },
     { name: 'Вт', [dataKey]: 19 },
     { name: 'Ср', [dataKey]: 3 },
