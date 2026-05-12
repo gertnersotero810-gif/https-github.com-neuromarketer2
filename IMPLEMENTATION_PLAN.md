@@ -22,8 +22,8 @@
 | 3.1 | Detection Node (SQL) | ✅ | `fc55b10` |
 | 3.2 | Verification Node + HITL | ✅ | `72c94f1` |
 | 3.3 | Text-to-SQL (read-only) | ✅ | `2d4acc5` |
-| 4.1 | Dashboard API (widgetArray) | ⬜ | — |
-| 4.2 | React Dashboard (grid) | ⬜ | — |
+| 4.1 | Dashboard API (widgetArray) | ✅ | `9aee09b` |
+| 4.2 | React Dashboard (grid) + UI Polish | ✅ | `c17019f` |
 
 ---
 
