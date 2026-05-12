@@ -408,3 +408,76 @@ async def test_gin_index_performance():
     assert "Index Scan" in explain_text or "Bitmap Index Scan" in explain_text
     assert "Seq Scan" not in explain_text
 
+
+@pytest.mark.asyncio
+async def test_llm_mapping_returns_valid_schema():
+    import httpx
+    from unittest.mock import AsyncMock
+    from app.core.llm_provider import LLMResponse, UsageInfo
+    from app.schemas.import_schema import MappingResult
+    from app.services.import_service import generate_normalization_script
+
+    # 1. Mock LLMProvider.complete
+    mock_llm = AsyncMock()
+    mock_content = """{
+        "mappings": [
+            {"source": "Дата", "target": "date", "confidence": 0.95},
+            {"source": "Кампания", "target": "campaign_id", "confidence": 0.90},
+            {"source": "Показы", "target": "impressions", "confidence": 0.88},
+            {"source": "Клики", "target": "clicks", "confidence": 0.91},
+            {"source": "Бюджет", "target": "spend", "confidence": 0.85}
+        ],
+        "unmapped": []
+    }"""
+    mock_llm.complete.return_value = LLMResponse(
+        content=mock_content,
+        usage=UsageInfo(prompt_tokens=10, completion_tokens=20, total_tokens=30),
+        model="gpt-4o-mini"
+    )
+
+    headers = ["Дата", "Кампания", "Показы", "Клики", "Бюджет"]
+    samples = [
+        {"Дата": "2024-01-01", "Кампания": "test", "Показы": 100, "Клики": 10, "Бюджет": 50.0},
+        {"Дата": "2024-01-02", "Кампания": "test2", "Показы": 200, "Клики": 20, "Бюджет": 100.0},
+        {"Дата": "2024-01-03", "Кампания": "test3", "Показы": 300, "Клики": 30, "Бюджет": 150.0}
+    ]
+
+    result = await generate_normalization_script(
+        headers=headers,
+        samples=samples,
+        llm=mock_llm,
+        tenant_id="test-tenant"
+    )
+
+    assert isinstance(result, MappingResult)
+    assert len(result.mappings) == 5
+    assert result.mappings[0].target == "date"
+    assert result.error_message is None
+
+
+@pytest.mark.asyncio
+async def test_llm_mapping_handles_llm_error_gracefully():
+    import httpx
+    from unittest.mock import AsyncMock
+    from app.schemas.import_schema import MappingResult
+    from app.services.import_service import generate_normalization_script
+
+    # 1. Mock LLMProvider.complete to raise HTTPError
+    mock_llm = AsyncMock()
+    mock_llm.complete.side_effect = httpx.HTTPError("LLM Provider Unavailable")
+
+    headers = ["Дата", "Кампания"]
+    samples = [{"Дата": "2024-01-01", "Кампания": "test"}]
+
+    result = await generate_normalization_script(
+        headers=headers,
+        samples=samples,
+        llm=mock_llm,
+        tenant_id="test-tenant"
+    )
+
+    assert isinstance(result, MappingResult)
+    assert len(result.mappings) == 0
+    assert result.error_message is not None
+
+

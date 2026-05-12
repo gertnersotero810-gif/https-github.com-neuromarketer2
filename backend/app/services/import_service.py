@@ -75,15 +75,45 @@ def execute_normalization_script(script_code: str, df: pd.DataFrame) -> pd.DataF
     return df_normalized
 
 async def generate_normalization_script(
-    headers: List[str],
-    samples: List[Dict[str, Any]],
-    llm: LLMProvider,
+    headers: list[str],
+    samples: list[dict],
+    llm,
     tenant_id: str,
-) -> str:
-    """
-    Stub method for Task 2.2 LLM Script Generation.
-    """
-    return ""
+) -> "MappingResult":
+    from app.schemas.import_schema import MappingResult, ColumnMapping
+    import json
+
+    prompt = (
+        f"Map these CSV columns to the target schema.\n"
+        f"Columns: {headers}\n"
+        f"Sample rows (first 3): {json.dumps(samples[:3], ensure_ascii=False)}\n"
+        f"Target fields: date, campaign_id, impressions, clicks, spend, "
+        f"conversions, ctr, cpc\n"
+        f"Respond ONLY with valid JSON: "
+        f'{{"mappings": [{{"source": "...", "target": "...", '
+        f'"confidence": 0.0}}], "unmapped": []}}'
+    )
+
+    try:
+        response = await llm.complete(
+            messages=[{"role": "user", "content": prompt}],
+            tenant_id=tenant_id,
+            operation="csv_mapping",
+        )
+        raw = response.content.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+        data = json.loads(raw)
+        return MappingResult(**data)
+    except Exception as exc:
+        return MappingResult(
+            mappings=[],
+            unmapped=headers,
+            error_message=str(exc),
+        )
 
 async def save_normalized_batch(
     df: pd.DataFrame,

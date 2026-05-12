@@ -728,7 +728,7 @@ ENVIRONMENT=development
 | 2.2 | Schema mapping (LLM + AST) | ✅ | ✅ | `30c77b7` |
 | 2.3 | JSONB storage + Mat. View | ✅ | ✅ | `30c77b7` |
 | 3.1 | Detection Node (SQL) | ✅ | ✅ | `fc55b10` |
-| 3.2 | Verification Node + HITL | ⬜ | ⬜ | — |
+| 3.2 | Verification Node + HITL | ✅ | ✅ | `72c94f1` |
 | 3.3 | Text-to-SQL (read-only) | ⬜ | ⬜ | — |
 | 4.1 | Dashboard API (widgetArray) | ⬜ | ⬜ | — |
 | 4.2 | React Dashboard (grid) | ⬜ | ⬜ | — |
