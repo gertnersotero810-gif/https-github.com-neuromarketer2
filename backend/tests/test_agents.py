@@ -343,3 +343,45 @@ async def test_approve_endpoint_success():
         assert data["decision"] == "approve"
         assert data["status"] == "success"
 
+
+@pytest.mark.asyncio
+async def test_text_to_sql_readonly_checks():
+    from app.agents.tools.text_to_sql import text_to_sql_tool, ReadOnlySQLError
+    from unittest.mock import AsyncMock
+
+    mock_db = AsyncMock()
+
+    # 1. DROP TABLE raises ReadOnlySQLError
+    with pytest.raises(ReadOnlySQLError):
+        await text_to_sql_tool("DROP TABLE projects", mock_db)
+
+    # 2. INSERT raises ReadOnlySQLError
+    with pytest.raises(ReadOnlySQLError):
+        await text_to_sql_tool("INSERT INTO raw_metrics (raw_data) VALUES ('{}')", mock_db)
+
+    # 3. UPDATE raises ReadOnlySQLError
+    with pytest.raises(ReadOnlySQLError):
+        await text_to_sql_tool("UPDATE projects SET name = 'Hacked'", mock_db)
+
+
+@pytest.mark.asyncio
+async def test_text_to_sql_valid_select():
+    from app.agents.tools.text_to_sql import text_to_sql_tool
+    from unittest.mock import AsyncMock, MagicMock
+
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    
+    mock_row1 = {"campaign_id": "c1", "ctr": 0.05}
+    mock_row2 = {"campaign_id": "c2", "ctr": 0.02}
+    
+    mock_result.mappings.return_value.all.return_value = [mock_row1, mock_row2]
+    mock_db.execute.return_value = mock_result
+
+    result = await text_to_sql_tool("SELECT campaign_id, ctr FROM metrics_daily_mv", mock_db)
+
+    assert isinstance(result, list)
+    assert len(result) == 2
+    assert result[0]["campaign_id"] == "c1"
+    assert result[1]["ctr"] == 0.02
+
