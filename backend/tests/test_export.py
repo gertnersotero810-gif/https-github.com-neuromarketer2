@@ -343,3 +343,104 @@ async def test_export_malformed_widget_data():
     assert isinstance(result, bytes)
     wb = openpyxl.load_workbook(BytesIO(result))
     assert len(wb.sheetnames) >= 1
+
+
+@pytest.mark.asyncio
+async def test_export_hard_stop_after_max_total_cells():
+    llm = MockLLMProvider()
+    db_mock = AsyncMock()
+    
+    from app.services.export_service import MAX_TOTAL_CELLS
+    num_cols = 25
+    num_rows = 5000
+    huge_data = [{f"col{j}": f"val_{i}_{j}" for j in range(num_cols)} for i in range(num_rows)]
+    
+    w1 = Widget(
+        i="w1", x=0, y=0, w=6, h=4, chart="line", dataKey="col0",
+        title="Widget One - Large Data",
+        data=huge_data
+    )
+    w2 = Widget(
+        i="w2", x=6, y=0, w=6, h=4, chart="bar", dataKey="val",
+        title="SHOULD_NOT_BE_PROCESSED_WIDGET_TWO",
+        data=[{"val": 100}]
+    )
+    
+    result = await ExportService.generate_report(
+        widgets=[w1, w2],
+        project_name="Hard Stop Project",
+        tenant_id="test",
+        llm=llm,
+        db=db_mock
+    )
+    
+    wb = openpyxl.load_workbook(BytesIO(result))
+    found_w2 = False
+    for ws in wb.worksheets:
+        for row in ws.iter_rows(values_only=True):
+            for cell_val in row:
+                if cell_val and "SHOULD_NOT_BE_PROCESSED_WIDGET_TWO" in str(cell_val):
+                    found_w2 = True
+    assert not found_w2, "Widget 2 should not be processed after MAX_TOTAL_CELLS was reached"
+
+
+@pytest.mark.asyncio
+async def test_export_duplicate_sanitized_sheet_names():
+    class DuplicateSheetLLMProvider(LLMProvider):
+        async def complete(self, messages, tenant_id, operation, response_format=None, temperature=0.7):
+            return LLMResponse(
+                content='{"section_names": ["S1"], "sheet_order": ["A/B", "A:B", "A?B", "A/B"]}',
+                usage=UsageInfo(prompt_tokens=10, completion_tokens=15, total_tokens=25),
+                model="gpt-4o-mini"
+            )
+            
+    llm = DuplicateSheetLLMProvider()
+    db_mock = AsyncMock()
+    
+    result = await ExportService.generate_report(
+        widgets=[],
+        project_name="Dedupe Sheet Names Project",
+        tenant_id="test",
+        llm=llm,
+        db=db_mock
+    )
+    
+    wb = openpyxl.load_workbook(BytesIO(result))
+    assert "A_B" in wb.sheetnames
+    assert "A_B_2" in wb.sheetnames
+    assert "A_B_3" in wb.sheetnames
+    assert "A_B_4" in wb.sheetnames
+
+
+@pytest.mark.asyncio
+async def test_export_max_widgets_truncation():
+    llm = MockLLMProvider()
+    db_mock = AsyncMock()
+    
+    from app.services.export_service import MAX_WIDGETS
+    widgets = []
+    for i in range(MAX_WIDGETS + 10):
+        widgets.append(Widget(
+            i=f"w_{i}", x=0, y=0, w=1, h=1, chart="number", dataKey="val",
+            title=f"Widget Title {i}",
+            data=[]
+        ))
+        
+    result = await ExportService.generate_report(
+        widgets=widgets,
+        project_name="Max Widgets Truncation",
+        tenant_id="test",
+        llm=llm,
+        db=db_mock
+    )
+    
+    wb = openpyxl.load_workbook(BytesIO(result))
+    found_truncated_widget = False
+    target_truncated_title = f"Widget Title {MAX_WIDGETS + 2}"
+    for ws in wb.worksheets:
+        for row in ws.iter_rows(values_only=True):
+            for cell_val in row:
+                if cell_val and target_truncated_title in str(cell_val):
+                    found_truncated_widget = True
+    assert not found_truncated_widget, "Widgets past MAX_WIDGETS should be truncated"
+

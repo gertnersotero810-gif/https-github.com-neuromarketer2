@@ -102,6 +102,7 @@ class ExportService:
 
         widgets = widgets[:MAX_WIDGETS]
         total_cells = 0
+        cell_limit_reached = False
 
         # 3. Create Workbook in-memory
         wb = openpyxl.Workbook()
@@ -136,8 +137,17 @@ class ExportService:
         # We will create the sheets in sheet_names, and put widgets in the active/primary sheet,
         # or distribute them. Let's create all recommended sheets.
         sheets = {}
+        seen_names = set()
         for name in sheet_names:
             clean_name = re.sub(r'[\[\]\:\*\?\/\\]', '_', name)[:31]
+            base_name = clean_name
+            counter = 2
+            while clean_name.lower() in seen_names:
+                suffix = f"_{counter}"
+                max_base_len = 31 - len(suffix)
+                clean_name = f"{base_name[:max_base_len]}{suffix}"
+                counter += 1
+            seen_names.add(clean_name.lower())
             sheets[clean_name] = wb.create_sheet(title=clean_name)
 
         # Ensure we have at least one sheet
@@ -195,6 +205,7 @@ class ExportService:
                             row=current_row, column=1,
                             value="[Export truncated: cell limit reached]"
                         )
+                        cell_limit_reached = True
                         break
 
                     for col_idx, h in enumerate(headers, start=1):
@@ -213,6 +224,8 @@ class ExportService:
                         else:
                             cell.alignment = Alignment(horizontal="left")
                     current_row += 1
+                if cell_limit_reached:
+                    break
             else:
                 primary_sheet.cell(row=current_row, column=1, value="No raw data available for this widget.").font = Font(italic=True, color="7F7F7F")
                 current_row += 1
