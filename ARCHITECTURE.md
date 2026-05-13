@@ -723,6 +723,7 @@ ENVIRONMENT=development
 │   │   ├── schemas/              # Pydantic схемы (request/response)
 │   │   └── services/
 │   │       ├── import_service.py # Zero-Touch импорт
+│   │       ├── export_service.py # .xlsx in-memory (openpyxl + LLM optional)
 │   │       └── dashboard_service.py
 │   ├── tests/
 │   │   ├── test_rls.py
@@ -765,6 +766,7 @@ ENVIRONMENT=development
 | 3.3 | Text-to-SQL (read-only) | ✅ | ✅ | `2d4acc5` |
 | 4.1 | Dashboard API (widgetArray) | ✅ | ✅ | `9aee09b` |
 | 4.2 | React Dashboard (grid) | ✅ | ✅ | `c17019f` |
+| 4.3 | ExportService (.xlsx) | ✅ | ✅ | `5ca7a10` |
 
 **Правило обновления (ОБЯЗАТЕЛЬНО для Ревьюера):**
 После каждой задачи Ревьюер обязан:

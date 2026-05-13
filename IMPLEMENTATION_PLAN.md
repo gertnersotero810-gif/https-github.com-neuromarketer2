@@ -24,6 +24,7 @@
 | 3.3 | Text-to-SQL (read-only) | ✅ | `2d4acc5` |
 | 4.1 | Dashboard API (widgetArray) | ✅ | `9aee09b` |
 | 4.2 | React Dashboard (grid) + UI Polish | ✅ | `c17019f` |
+| 4.3 | ExportService (.xlsx) | ✅ | `5ca7a10` |
 
 ---
 
